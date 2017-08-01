@@ -1,0 +1,913 @@
+ALTER TABLE parking_dataset
+ADD COLUMN loc1_has_num boolean,
+ADD COLUMN loc1_starts_w_num boolean,
+ADD COLUMN loc1_has_letter boolean,
+ADD COLUMN loc2_has_num boolean,
+ADD COLUMN loc2_starts_w_num boolean,
+ADD COLUMN loc2_has_letter boolean,
+ADD COLUMN loc3_has_num boolean,
+ADD COLUMN loc3_starts_w_num boolean,
+ADD COLUMN loc3_has_letter boolean,
+ADD COLUMN loc4_has_num boolean,
+ADD COLUMN loc4_starts_w_num boolean,
+ADD COLUMN loc4_has_letter boolean;
+
+-- flagging if locations (1-4) contain a number, start with number or do not contain letter will help with identifying addresses once we join
+-- with address table 
+UPDATE parking_dataset
+SET loc1_has_num = (CASE WHEN location1 ~'\d+ ?' THEN TRUE ELSE FALSE END),
+	loc1_starts_w_num = (CASE WHEN location1 ~'^[0-9]' THEN TRUE ELSE FALSE END),
+	loc1_has_letter = (CASE WHEN location1 ~'[^0-9]' THEN TRUE ELSE FALSE END),
+	loc2_has_num = (CASE WHEN location2 ~'\d+ ?' THEN TRUE ELSE FALSE END), 
+	loc2_starts_w_num = (CASE WHEN location2 ~'^[0-9]' THEN TRUE ELSE FALSE END), 
+	loc2_has_letter = (CASE WHEN location2 ~'[^0-9]' THEN TRUE ELSE FALSE END), 
+	loc3_has_num = (CASE WHEN location3 ~'\d+ ?' THEN TRUE ELSE FALSE END), 
+	loc3_starts_w_num = (CASE WHEN location3 ~'^[0-9]' THEN TRUE ELSE FALSE END), 
+	loc3_has_letter = (CASE WHEN location3 ~'[^0-9]' THEN TRUE ELSE FALSE END), 
+	loc4_has_num = (CASE WHEN location4 ~'\d+ ?' THEN TRUE ELSE FALSE END), 
+	loc4_starts_w_num = (CASE WHEN location4 ~'^[0-9]' THEN TRUE ELSE FALSE END), 
+	loc4_has_letter = (CASE WHEN location4 ~'[^0-9]' THEN TRUE ELSE FALSE END);
+
+-- create new address field 
+
+ALTER TABLE parking_dataset
+ADD COLUMN clean_address varchar(200);
+
+-- step 1: clean addresses where location2 does not start with street number)
+-- expected result : 220 OAK ST
+-- 22,034,624 rows updated
+UPDATE parking_dataset
+SET clean_address = SUBSTRING(location2, POSITION((SUBSTRING(location2 FROM '[\d]')) IN location2))
+WHERE loc2_has_num = TRUE AND loc2_has_letter = TRUE;
+
+-- update clean address to include addresses where location1 contains street number
+-- i.e. location1 = 1, location2 = MASSEY SQUARE, clean_address = 1 MASSEY SQUARE
+-- 30 rows updated
+UPDATE parking_dataset
+SET clean_address = location1 || ' ' || location2
+WHERE clean_address IS NULL AND loc1_starts_w_num = TRUE AND loc2_has_num = FALSE;
+
+-- update clean address to include addresses where location 1 has codes (i.e. NR - near) in front of street number
+-- i.e. location1 = AT 11, location2 = ONTARIO RD, clean_address = 11 ONTARIO RD
+
+UPDATE parking_dataset SET clean_address = '1 RICHVIEW RD' WHERE clean_address IS NULL AND location1 = '1:00:00 AM' AND location2 = 'RICHVIEW RD';
+UPDATE parking_dataset SET clean_address = '80 MORNELLE CRT' WHERE clean_address IS NULL AND location1 = '80 MORNE' AND location2 = 'CORNELLE CRT';
+UPDATE parking_dataset SET clean_address = '11 ONTARIO RD' WHERE clean_address IS NULL AND location1 = 'AT 11' AND location2 = 'ONTARIO RD';
+UPDATE parking_dataset SET clean_address = '65 WELLESLEY ST E' WHERE clean_address IS NULL AND location1 = 'AT 65' AND location2 = 'WELLESLEY ST E';
+UPDATE parking_dataset SET clean_address = '70 REXDALE CL' WHERE clean_address IS NULL AND location1 = 'AT 70' AND location2 = 'REXDALE CL';
+UPDATE parking_dataset SET clean_address = '65 FOREST MANOR RD' WHERE clean_address IS NULL AND location1 = 'AT NEAR65' AND location2 = 'FOREST MANOR RD';
+UPDATE parking_dataset SET clean_address = '33 ISABELLA ST' WHERE clean_address IS NULL AND location1 = 'AT33' AND location2 = 'ISA PA LAND ISASABELLA ST';
+UPDATE parking_dataset SET clean_address = '173 DANFORTH AVE' WHERE clean_address IS NULL AND location1 = 'CP173' AND location2 = 'DANFORTH' AND location3 = 'AND';
+UPDATE parking_dataset SET clean_address = '44 FULLER AV' WHERE clean_address IS NULL AND location1 = 'CP44' AND location2 = 'FULLER AV';
+UPDATE parking_dataset SET clean_address = '2 ADELAIDE ST W' WHERE clean_address IS NULL AND location1 = 'L2' AND location2 = 'ADELAIDE ST W' AND location3 = 'OUTSIDE';
+UPDATE parking_dataset SET clean_address = '173 DANFORTH AVE' WHERE clean_address IS NULL AND location1 = 'LCP173GP' AND location2 = 'RHODES/DANFORTH AVE';
+UPDATE parking_dataset SET clean_address = '173 DANFORTH AVE' WHERE clean_address IS NULL AND location1 = 'LOTCP173' AND location2 = 'DANFORTH' AND location3 = 'AND';
+UPDATE parking_dataset SET clean_address = '13 GRASS MEADOWAY' WHERE clean_address IS NULL AND location1 = 'NR 13' AND location2 = 'GRASS MEADOWAY';
+UPDATE parking_dataset SET clean_address = '143 QUEENS WHARF RD' WHERE clean_address IS NULL AND location1 = 'NR 143' AND location2 = 'QUEENS WHARF RD';
+UPDATE parking_dataset SET clean_address = '15 HEDGEEND RD' WHERE clean_address IS NULL AND location1 = 'NR 15' AND location2 = 'HEDGEEND RD';
+UPDATE parking_dataset SET clean_address = '15 PEBBLE BYWAY' WHERE clean_address IS NULL AND location1 = 'NR 15' AND location2 = 'PEBBLE BYWAY';
+UPDATE parking_dataset SET clean_address = '152 TIMES RD' WHERE clean_address IS NULL AND location1 = 'NR 152' AND location2 = 'TIMES RD';
+UPDATE parking_dataset SET clean_address = '284 BIRCHMOUNT RD' WHERE clean_address IS NULL AND location1 = 'NR 284' AND location2 = 'BIRCHMOUNT RD';
+UPDATE parking_dataset SET clean_address = '13 DUCK HAWKWAY' WHERE clean_address IS NULL AND location1 = 'NR UNIT 13' AND location2 = 'DUCK HAWKWAY';
+UPDATE parking_dataset SET clean_address = '30 YACHTERS LANE' WHERE clean_address IS NULL AND location1 = 'NR UNIT 30' AND location2 = 'YACHTERS LANE';
+UPDATE parking_dataset SET clean_address = '32 LEGION RD' WHERE clean_address IS NULL AND location1 = 'NR UNIT 32' AND location2 = 'LEGION RD';
+UPDATE parking_dataset SET clean_address = '1 OLIVE AVE' WHERE clean_address IS NULL AND location1 = 'NR1' AND location2 = 'OLIVE AVE';
+UPDATE parking_dataset SET clean_address = '10 MOONSTONE BYWAY' WHERE clean_address IS NULL AND location1 = 'NR10' AND location2 = 'MOONSTONE BYWAY';
+UPDATE parking_dataset SET clean_address = '17 DELANO PL' WHERE clean_address IS NULL AND location1 = 'NR17' AND location2 = 'DELANO PL';
+UPDATE parking_dataset SET clean_address = '20 NATURE PATHWY' WHERE clean_address IS NULL AND location1 = 'NR20' AND location2 = 'NATURE PATHWY';
+UPDATE parking_dataset SET clean_address = '24 NATURE PATHWAY' WHERE clean_address IS NULL AND location1 = 'NR24' AND location2 = 'NATURE PATHWAY';
+UPDATE parking_dataset SET clean_address = '29 HEDGE END RD' WHERE clean_address IS NULL AND location1 = 'NR29' AND location2 = 'HEDGE END RD';
+UPDATE parking_dataset SET clean_address = '9 DELANO PL' WHERE clean_address IS NULL AND location1 = 'NR9' AND location2 = 'DELANO PL';
+UPDATE parking_dataset SET clean_address = '93 MAPLE BRANCH PATH' WHERE clean_address IS NULL AND location1 = 'NRUNIT#93' AND location2 = 'MAPLE BRANCH PATH';
+UPDATE parking_dataset SET clean_address = '97 MAPLE BRANCH PATH' WHERE clean_address IS NULL AND location1 = 'NRUNIT#97' AND location2 = 'MAPLE BRANCH PATH';
+UPDATE parking_dataset SET clean_address = '20 INLET MEWS' WHERE clean_address IS NULL AND location1 = 'NRUNIT20' AND location2 = 'INLET MEWS';
+UPDATE parking_dataset SET clean_address = '' WHERE clean_address IS NULL AND location1 = 'R1' AND location2 = 'STEELES AVE E' AND location3 = 'R2';
+UPDATE parking_dataset SET clean_address = '15 NOVA SCOTIA AVE' WHERE clean_address IS NULL AND location1 = 'REAR/58' AND location2 = 'HORSE PALACE MANITOBA DR';
+UPDATE parking_dataset SET clean_address = '15 NOVA SCOTIA AVE' WHERE clean_address IS NULL AND location1 = 'REAR/GT28' AND location2 = 'HORSE PALACE MANITOBA DR';
+UPDATE parking_dataset SET clean_address = '15 NOVA SCOTIA AVE' WHERE clean_address IS NULL AND location1 = 'REAR/GT28' AND location2 = 'HORSE PLACE MANITOBA DR';
+UPDATE parking_dataset SET clean_address = '15 NOVA SCOTIA AVE' WHERE clean_address IS NULL AND location1 = 'REAR/GT58' AND location2 = 'HORSE PALACE MANITOBA DR';
+UPDATE parking_dataset SET clean_address = '15 NOVA SCOTIA AVE' WHERE clean_address IS NULL AND location1 = 'REAR/T28' AND location2 = 'HORSE PLACE MANITOBA DR';
+UPDATE parking_dataset SET clean_address = '15 NOVA SCOTIA AVE' WHERE clean_address IS NULL AND location1 = 'REAR/T58' AND location2 = 'HORSE PALACE MANITOBA DR';
+UPDATE parking_address2 SET clean_address = '317 LORRAINE ST' WHERE clean_address IS NULL AND location1 = 'VP317' AND location2 = 'LORRAINE ST';
+
+-- update TTC parking lot address
+-- 21 rows updated
+UPDATE parking_dataset SET clean_address = '101 SUBWAY CRES' WHERE location2 LIKE '%TTC%' AND location4 LIKE '%KIPLING%' AND clean_address IS NULL;
+UPDATE parking_dataset SET clean_address = '101 SUBWAY CRES' WHERE location2 LIKE '%TTC%' AND location2 LIKE '%KIPLING%' AND clean_address IS NULL;
+UPDATE parking_dataset SET clean_address = '101 SUBWAY CRES' WHERE location2 LIKE '%TTC%' AND location2 LIKE '%KIPLING%' AND clean_address ='2';
+UPDATE parking_dataset SET clean_address = '101 SUBWAY CRES' WHERE location2 = 'TTC LOT SUBWAY CRES' AND clean_address IS NULL;
+
+-- because the address dataset has a standard nomenclature for street types (i.e. ave, st, blvd), clean_address needs to be cleaned so that
+-- we can join the two datasets together later
+-- i.e clean_address = 97 ST GERMAIN AV should be 97 ST GERMAIN AVE
+-- SELECT location1, location2, location3, location4, clean_address FROM parking_dataset WHERE clean_address LIKE '% AV' LIMIT 15;
+
+-- based on clean_address that has been parsed from the location columns, the address will be deconstructed more in order to ensure accuracy of the address
+-- begin with street number
+
+ALTER TABLE parking_dataset
+ADD COLUMN street_num varchar(25);
+
+UPDATE parking_dataset
+SET street_num = LEFT(clean_address, POSITION(' ' in clean_address) - 1)
+WHERE clean_address IS NOT NULL;
+
+-- street name
+
+ALTER TABLE parking_dataset
+ADD COLUMN street_name varchar(255);
+
+UPDATE parking_dataset
+SET street_name = SUBSTRING(clean_address, POSITION(' ' in clean_address) + 1)
+WHERE clean_address IS NOT NULL;
+
+-- street type
+ALTER TABLE parking_dataset
+ADD COLUMN street_type varchar(25);
+
+UPDATE parking_dataset
+SET street_type = (CASE WHEN street_name LIKE '% AVE' THEN 'AVE'
+WHEN street_name LIKE '% REDPATHA V' THEN 'AVE'
+WHEN street_name LIKE '% A' THEN 'AVE'
+WHEN street_name LIKE '% AV%' THEN 'AVE'
+WHEN street_name LIKE '% AVE.' THEN 'AVE'
+WHEN street_name LIKE '% AVE N' THEN 'AVE'
+WHEN street_name LIKE '% AVE E' THEN 'AVE'
+WHEN street_name LIKE '% AVE S' THEN 'AVE'
+WHEN street_name LIKE '% AVE W' THEN 'AVE'
+WHEN street_name LIKE '% AV' THEN 'AVE'
+WHEN street_name LIKE '% AV E' THEN 'AVE'
+WHEN street_name LIKE '% AV W' THEN 'AVE'
+WHEN street_name LIKE '% AV WEST' THEN 'AVE'
+WHEN street_name LIKE '% AVE. W.' THEN 'AVE'
+WHEN street_name LIKE '% AVENUE' THEN 'AVE'
+WHEN street_name LIKE '% AVENUE WEST' THEN 'AVE'
+WHEN street_name LIKE '% AVE WEST' THEN 'AVE'
+WHEN street_name LIKE '% AVE   W/S' THEN 'AVE'
+WHEN street_name LIKE '% VE' THEN 'AVE'
+WHEN street_name LIKE '% AVE UN 101' THEN 'AVE'
+WHEN street_name LIKE '% AVE UN 102' THEN 'AVE'
+WHEN street_name LIKE '% AVR' THEN 'AVE'
+WHEN street_name LIKE '% AVE N/S' THEN 'AVE'
+WHEN street_name LIKE '% AV EAST' THEN 'AVE'
+WHEN street_name LIKE '% AVE EAST' THEN 'AVE'
+WHEN street_name LIKE '% VE E' THEN 'AVE'
+WHEN street_name LIKE '% AV #16' THEN 'AVE'
+WHEN street_name LIKE '% AV UNIT #1 ' THEN 'AVE'
+WHEN street_name LIKE '% AV UNIT #31' THEN 'AVE'
+WHEN street_name LIKE '% AVE UN 25' THEN 'AVE'
+WHEN street_name LIKE '% VAE' THEN 'AVE'
+WHEN street_name LIKE '% AVE LINE.' THEN 'AVE'
+WHEN street_name LIKE '% AVE  E#2' THEN 'AVE'
+WHEN street_name LIKE '% AVE GARAGE #31' THEN 'AVE'
+WHEN street_name LIKE '% FINCHAV W ' THEN 'AVE'
+WHEN street_name LIKE '% AVEE' THEN 'AVE'
+WHEN street_name LIKE '% AE' THEN 'AVE'
+WHEN street_name LIKE '% AVE3' THEN 'AVE'
+WHEN street_name LIKE '%  DANFORTHA V' THEN 'AVE'
+WHEN street_name LIKE '% PROGRESS AE' THEN 'AVE'
+WHEN street_name LIKE '% EGLINTON W' THEN 'AVE'
+WHEN street_name LIKE '% SHEPPARD WEST' THEN 'AVE'
+WHEN street_name LIKE '% SHEPPARD E' THEN 'AVE'
+WHEN street_name LIKE '% V W' THEN 'AVE'
+WHEN street_name LIKE '% AV % 34' THEN 'AVE'
+WHEN street_name LIKE '% CLARENDONA V' THEN 'AVE'
+WHEN street_name LIKE '% AVENUE W' THEN 'AVE'
+WHEN street_name LIKE '% AVE. W' THEN 'AVE'
+WHEN street_name LIKE '% A V' THEN 'AVE'
+WHEN street_name LIKE '% A VW' THEN 'AVE'
+WHEN street_name LIKE '% AE W' THEN 'AVE'
+WHEN street_name LIKE '% AVE. W ' THEN 'AVE'
+WHEN street_name LIKE '% AVE.W' THEN 'AVE'
+WHEN street_name LIKE '% AVE.W.' THEN 'AVE'
+WHEN street_name LIKE '% VE W' THEN 'AVE'
+WHEN street_name LIKE '% SHEPPARDAV W' THEN 'AVE'
+WHEN street_name LIKE '% AVENUE EAST' THEN 'AVE'
+WHEN street_name LIKE '% AVENUE E' THEN 'AVE'
+WHEN street_name LIKE '% AVE W  NR 5' THEN 'AVE'
+WHEN street_name LIKE '% AVE W  NR 8' THEN 'AVE'
+WHEN street_name LIKE '% AVE W NR 22' THEN 'AVE'
+WHEN street_name LIKE '% PHARMACYA V' THEN 'AVE'
+WHEN street_name LIKE '% AEV' THEN 'AVE'
+WHEN street_name LIKE '% BENSONA V' THEN 'AVE'
+WHEN street_name LIKE '% LAWRENCE W' THEN 'AVE'
+WHEN street_name LIKE '% BISHOPA V' THEN 'AVE'
+WHEN street_name LIKE '% JEFFERSONA V' THEN 'AVE'
+WHEN street_name LIKE '% FRASERAV' THEN 'AVE'
+WHEN street_name LIKE '% BAGNATO' THEN 'BAGNATO'
+WHEN street_name LIKE '% BYWY' THEN 'BYWAY'
+WHEN street_name LIKE '% BL N' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD NORTH' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD UNIT #64' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD UNIT #63' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD UNIT #62' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD UNIT #46' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD UNIT #48' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD UNIT #41' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD UNIT #38' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD UNIT #32' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD UNIT #61' THEN 'BLVD'
+WHEN street_name LIKE '% BVD' THEN 'BLVD'
+WHEN street_name LIKE '% BOULEVARD WEST' THEN 'BLVD'
+WHEN street_name LIKE '% BLVF W' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD. W.' THEN 'BLVD'
+WHEN street_name LIKE '% BLDV' THEN 'BLVD'
+WHEN street_name LIKE '% LBLVD W' THEN 'BLVD'
+WHEN street_name LIKE '% BLV W' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD #33' THEN 'BLVD'
+WHEN street_name LIKE '% LBVD W' THEN 'BLVD'
+WHEN street_name LIKE '% BLV' THEN 'BLVD'
+WHEN street_name LIKE '% BL' THEN 'BLVD'
+WHEN street_name LIKE '% BL W' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD.' THEN 'BLVD'
+WHEN street_name LIKE '% BVLD' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD N' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD E' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD S' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD SOUTH' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD W' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD WEST' THEN 'BLVD'
+WHEN street_name LIKE '% BL NR%' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD UNIT #36' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD UNIT #69' THEN 'BLVD'
+WHEN street_name LIKE '% BL UN 32' THEN 'BLVD'
+WHEN street_name LIKE '% CIR' THEN 'CRCL'
+WHEN street_name LIKE '% CIRCLE' THEN 'CRCL'
+WHEN street_name LIKE '% CRCL' THEN 'CRCL'
+WHEN street_name LIKE '% CIRT' THEN 'CRCT'
+WHEN street_name LIKE '% CIRCUIT' THEN 'CRCT'
+WHEN street_name LIKE '% CRCT' THEN 'CRCT'
+WHEN street_name LIKE '% CRESENT' THEN 'CRES'
+WHEN street_name LIKE '% CRES.' THEN 'CRES'
+WHEN street_name LIKE '% CRE' THEN 'CRES'
+WHEN street_name LIKE '% CR' THEN 'CRES'
+WHEN street_name LIKE '% CRESCENT' THEN 'CRES'
+WHEN street_name LIKE '% CRES' THEN 'CRES'
+WHEN street_name LIKE '% CRES N' THEN 'CRES'
+WHEN street_name LIKE '% CRES E' THEN 'CRES'
+WHEN street_name LIKE '% CRES S' THEN 'CRES'
+WHEN street_name LIKE '% CRES W' THEN 'CRES'
+WHEN street_name LIKE '% CRS' THEN 'CRES'
+WHEN street_name LIKE '% CREST' THEN 'CRES'
+WHEN street_name LIKE '% COURT' THEN 'CRT'
+WHEN street_name LIKE '% CRT.' THEN 'CRT'
+WHEN street_name LIKE '% CRT' THEN 'CRT'
+WHEN street_name LIKE '% CRT N' THEN 'CRT'
+WHEN street_name LIKE '% CRT E' THEN 'CRT'
+WHEN street_name LIKE '% CRT S' THEN 'CRT'
+WHEN street_name LIKE '% CRT W' THEN 'CRT'
+WHEN street_name LIKE '% CS' THEN 'CS'
+WHEN street_name LIKE '% CT' THEN 'CRT'
+WHEN street_name LIKE '% DR.' THEN 'DR'
+WHEN street_name LIKE '% DRIVE  S/S' THEN 'DR'
+WHEN street_name LIKE '% DR W/S' THEN 'DR'
+WHEN street_name LIKE '% DRIVE' THEN 'DR'
+WHEN street_name LIKE '% DR' THEN 'DR'
+WHEN street_name LIKE '% DR N' THEN 'DR'
+WHEN street_name LIKE '% DR E' THEN 'DR'
+WHEN street_name LIKE '% DR S' THEN 'DR'
+WHEN street_name LIKE '% DR W' THEN 'DR'
+WHEN street_name LIKE '% DR N/S' THEN 'DR'
+WHEN street_name LIKE '% DR S/S' THEN 'DR'
+WHEN street_name LIKE '% DRV' THEN 'DR'
+WHEN street_name LIKE '% GDN' THEN 'GRN'
+WHEN street_name LIKE '% GARDENS' THEN 'GDNS'
+WHEN street_name LIKE '% GRDNS' THEN 'GDNS'
+WHEN street_name LIKE '% GDNS' THEN 'GDNS'
+WHEN street_name LIKE '% GRN' THEN 'GRN'
+WHEN street_name LIKE '% GR' THEN 'GRV'
+WHEN street_name LIKE '% GRV' THEN 'GRV'
+WHEN street_name LIKE '% GROVE' THEN 'GRV'
+WHEN street_name LIKE '% GATE' THEN 'GT'
+WHEN street_name LIKE '% GT' THEN 'GT'
+WHEN street_name LIKE '% HILL' THEN 'HILL'
+WHEN street_name LIKE '% HILLS' THEN 'HILLS'
+WHEN street_name LIKE '% HILL S' THEN 'HILL'
+WHEN street_name LIKE '% HILL N' THEN 'HILL'
+WHEN street_name LIKE '% HEIGHTS' THEN 'HTS'
+WHEN street_name LIKE '% HTS' THEN 'HTS'
+WHEN street_name LIKE '% KEEP' THEN 'KEEP'
+WHEN street_name LIKE '% LN' THEN 'LANE'
+WHEN street_name LIKE '% LA' THEN 'LANE'
+WHEN street_name LIKE '% LANE' THEN 'LANE'
+WHEN street_name LIKE '% LANEWAY' THEN 'LANEWAY'
+WHEN street_name LIKE '% LINE' THEN 'LINE'
+WHEN street_name LIKE '% LWN' THEN 'LWN'
+WHEN street_name LIKE '% MEWS' THEN 'MEWS'
+WHEN street_name LIKE '% PATH' THEN 'PATH'
+WHEN street_name LIKE '% PATHWAY' THEN 'PATHWAY'
+WHEN street_name LIKE '% PARK' THEN 'PK'
+WHEN street_name LIKE '% PK' THEN 'PK'
+WHEN street_name LIKE '% PKWY' THEN 'PKWY'
+WHEN street_name LIKE '% PLACE' THEN 'PL'
+WHEN street_name LIKE '% PL' THEN 'PL'
+WHEN street_name LIKE '% PTWY' THEN 'PTWY'
+WHEN street_name LIKE '% PTY' THEN 'PTY'
+WHEN street_name LIKE '% QUAY' THEN 'QUAY'
+WHEN street_name LIKE '% QUAY E' THEN 'QUAY'
+WHEN street_name LIKE '% QUAY W' THEN 'QUAY'
+WHEN street_name LIKE '% ROAD' THEN 'RD'
+WHEN street_name LIKE '% HILLR D' THEN 'RD'
+WHEN street_name LIKE '% RD  E/S' THEN 'RD'
+WHEN street_name LIKE '% RD' THEN 'RD'
+WHEN street_name LIKE '% RD.' THEN 'RD'
+WHEN street_name LIKE '% RD N' THEN 'RD'
+WHEN street_name LIKE '% RD E' THEN 'RD'
+WHEN street_name LIKE '% RD S' THEN 'RD'
+WHEN street_name LIKE '% RD W' THEN 'RD'
+WHEN street_name LIKE '% RD SB' THEN 'RD'
+WHEN street_name LIKE '% RD  #2' THEN 'RD'
+WHEN street_name LIKE '% RD  #4' THEN 'RD'
+WHEN street_name LIKE '% RD  #90' THEN 'RD'
+WHEN street_name LIKE '% RAOD' THEN 'RD'
+WHEN street_name LIKE '% RD ES' THEN 'RD'
+WHEN street_name LIKE '% RD W/S' THEN 'RD'
+WHEN street_name LIKE '% R' THEN 'RD'
+WHEN street_name LIKE '% KINGSTONR D' THEN 'RD'
+WHEN street_name LIKE '% MCCOWNR D' THEN 'RD'
+WHEN street_name LIKE '% WESTONR D ' THEN 'RD'
+WHEN street_name LIKE '% KENNEDYR D' THEN 'RD'
+WHEN street_name LIKE '% RD SPOT 56' THEN 'RD'
+WHEN street_name LIKE '% LLOYD MANOR D' THEN 'RD'
+WHEN street_name LIKE '% SENTINELLR D ' THEN 'RD'
+WHEN street_name LIKE '% DON MILLS D' THEN 'RD'
+WHEN street_name LIKE '% DON MILLS RD 3' THEN 'RD'
+WHEN street_name LIKE '% DON MILLSR D' THEN 'RD'
+WHEN street_name LIKE '% DON MILL SRD' THEN 'RD'
+WHEN street_name LIKE '% DON MILLSR D' THEN 'RD'
+WHEN street_name LIKE '% KENNEDYR D' THEN 'RD'
+WHEN street_name LIKE '% WESOTNR D' THEN 'RD'
+WHEN street_name LIKE '% SQUARE' THEN 'SQ'
+WHEN street_name LIKE '% SQ' THEN 'SQ'
+WHEN street_name LIKE '% SQ N' THEN 'SQ'
+WHEN street_name LIKE '% SQ E' THEN 'SQ'
+WHEN street_name LIKE '% SQ S' THEN 'SQ'
+WHEN street_name LIKE '% SQ W' THEN 'SQ'
+WHEN street_name LIKE '% HURONS T ' THEN 'ST'
+WHEN street_name LIKE '% ST W%S' THEN 'ST'
+WHEN street_name LIKE '% ST. EAST' THEN 'ST'
+WHEN street_name LIKE '% S E' THEN 'ST'
+WHEN street_name LIKE '% HOLLYS T' THEN 'ST'
+WHEN street_name LIKE '% ST BACKLOT' THEN 'ST'
+WHEN street_name LIKE '% ELIZABETHS T' THEN 'ST'
+WHEN street_name LIKE '% ST F' THEN 'ST'
+WHEN street_name LIKE '% S' THEN 'ST'
+WHEN street_name LIKE '% STE' THEN 'ST'
+WHEN street_name LIKE '% S TW' THEN 'ST'
+WHEN street_name LIKE '% ST.' THEN 'ST'
+WHEN street_name LIKE '% ST. E.' THEN 'ST'
+WHEN street_name LIKE '% ST' THEN 'ST'
+WHEN street_name LIKE '% ST N' THEN 'ST'
+WHEN street_name LIKE '% ST E' THEN 'ST'
+WHEN street_name LIKE '% ST EAST' THEN 'ST'
+WHEN street_name LIKE '% ST WEST' THEN 'ST'
+WHEN street_name LIKE '% ST S' THEN 'ST'
+WHEN street_name LIKE '% ST W' THEN 'ST'
+WHEN street_name LIKE '% ST. W.' THEN 'ST'
+WHEN street_name LIKE '% STREET WEST' THEN 'ST'
+WHEN street_name LIKE '% STREET' THEN 'ST'
+WHEN street_name LIKE '% S TE' THEN 'ST'
+WHEN street_name LIKE '% ST W N/S' THEN 'ST'
+WHEN street_name LIKE '% S W' THEN 'ST'
+WHEN street_name LIKE '% ST WS' THEN 'ST'
+WHEN street_name LIKE '% STREET W' THEN 'ST'
+WHEN street_name LIKE '% KINGS T E' THEN 'ST'
+WHEN street_name LIKE '% KINGS T W' THEN 'ST'
+WHEN street_name LIKE '% T W' THEN 'ST'
+WHEN street_name LIKE '% ST E/S' THEN 'ST'
+WHEN street_name LIKE '% SUMACHS T' THEN 'ST'
+WHEN street_name LIKE '% SST' THEN 'ST'
+WHEN street_name LIKE '% ST ES' THEN 'ST'
+WHEN street_name LIKE '% ST W NS' THEN 'ST'
+WHEN street_name LIKE '% ST N/S' THEN 'ST'
+WHEN street_name LIKE '% STREET EAST' THEN 'ST'
+WHEN street_name LIKE '% STR' THEN 'ST'
+WHEN street_name LIKE '% ST  W' THEN 'ST'
+WHEN street_name LIKE '% SPADINAR D' THEN 'RD'
+WHEN street_name LIKE '% STREET E' THEN 'ST'
+WHEN street_name LIKE '% BLOORST W' THEN 'ST'
+WHEN street_name LIKE '% YONGE T' THEN 'ST'
+WHEN street_name LIKE '% STREET   N3-03 - N3-04' THEN 'ST'
+WHEN street_name LIKE '% ST  E' THEN 'ST'
+WHEN street_name LIKE '% ST E%B' THEN 'ST'
+WHEN street_name LIKE '%  MERTONS T' THEN 'ST'
+WHEN street_name LIKE '% ST 3' THEN 'ST'
+WHEN street_name LIKE '% SHERBOURNE T' THEN 'ST'
+WHEN street_name LIKE '% WELELSLEYS T E' THEN 'ST'
+WHEN street_name LIKE '% ST. E' THEN 'ST'
+WHEN street_name LIKE '% T E' THEN 'ST'
+WHEN street_name LIKE '% ST W %' THEN 'ST'
+WHEN street_name LIKE '% STW' THEN 'ST'
+WHEN street_name LIKE '% QUEEN W' THEN 'ST'
+WHEN street_name LIKE '% ST. EAST' THEN 'ST'
+WHEN street_name LIKE '% ST W%S' THEN 'ST'
+WHEN street_name LIKE '% ST S%S' THEN 'ST'
+WHEN street_name LIKE '% ELIZABETHS T ' THEN 'ST'
+WHEN street_name LIKE '% TERRACE' THEN 'TER'
+WHEN street_name LIKE '% TERR' THEN 'TER'
+WHEN street_name LIKE '% TER' THEN 'TER'
+WHEN street_name LIKE '% TRAIL' THEN 'TRL'
+WHEN street_name LIKE '% TRL' THEN 'TRL'
+WHEN street_name LIKE '% TR' THEN 'TRL'
+WHEN street_name LIKE '% WALK' THEN 'WALK'
+WHEN street_name LIKE '% WAY #75' THEN 'WAY'
+WHEN street_name LIKE '% WAY' THEN 'WAY'
+WHEN street_name LIKE '% WAY  TH #4' THEN 'WAY'
+WHEN street_name LIKE '% WDS' THEN 'WDS'
+WHEN street_name LIKE '% WOOD' THEN 'WOOD'
+ELSE NULL END)
+WHERE clean_address IS NOT NULL;
+-- SELECT COUNT(*) FROM parking_dataset WHERE street_type IS NOT NULL; 
+-- 22,034,734
+
+
+-- street direction
+
+ALTER TABLE parking_dataset
+ADD COLUMN street_dir varchar(25);
+
+UPDATE parking_dataset
+SET street_dir = (CASE WHEN street_name LIKE '% AVE N' THEN 'N'
+WHEN street_name LIKE '% AVE E' THEN 'E'
+WHEN street_name LIKE '% AVE S' THEN 'S'
+WHEN street_name LIKE '% AVE W' THEN 'W'
+WHEN street_name LIKE '% AV E' THEN 'E'
+WHEN street_name LIKE '% AV W' THEN 'W'
+WHEN street_name LIKE '% AV WEST' THEN 'W'
+WHEN street_name LIKE '% AVE. W.' THEN 'W'
+WHEN street_name LIKE '% AVENUE WEST' THEN 'W'
+WHEN street_name LIKE '% AVE WEST' THEN 'W'
+WHEN street_name LIKE '% AV EAST' THEN 'E'
+WHEN street_name LIKE '% AVE EAST' THEN 'E'
+WHEN street_name LIKE '% VE E' THEN 'E'
+WHEN street_name LIKE '% AVE  E#2' THEN 'E'
+WHEN street_name LIKE '% FINCHAV W ' THEN 'W'
+WHEN street_name LIKE '% EGLINTON W' THEN 'W'
+WHEN street_name LIKE '% SHEPPARD WEST' THEN 'W'
+WHEN street_name LIKE '% SHEPPARD E' THEN 'E'
+WHEN street_name LIKE '% V W' THEN 'W'
+WHEN street_name LIKE '% AVENUE W' THEN 'W'
+WHEN street_name LIKE '% AVE. W' THEN 'W'
+WHEN street_name LIKE '% A VW' THEN 'W'
+WHEN street_name LIKE '% AE W' THEN 'W'
+WHEN street_name LIKE '% AVE. W ' THEN 'W'
+WHEN street_name LIKE '% AVE.W' THEN 'W'
+WHEN street_name LIKE '% AVE.W.' THEN 'W'
+WHEN street_name LIKE '% VE W' THEN 'W'
+WHEN street_name LIKE '% SHEPPARDAV W' THEN 'W'
+WHEN street_name LIKE '% AVENUE EAST' THEN 'E'
+WHEN street_name LIKE '% AVENUE E' THEN 'E'
+WHEN street_name LIKE '% AVE W  NR 5' THEN 'W'
+WHEN street_name LIKE '% AVE W  NR 8' THEN 'W'
+WHEN street_name LIKE '% AVE W NR 22' THEN 'W'
+WHEN street_name LIKE '% LAWRENCE W' THEN 'W'
+WHEN street_name LIKE '% LAWRENCEAV W' THEN 'W'
+WHEN street_name LIKE '% BL N' THEN 'N'
+WHEN street_name LIKE '% BLVD NORTH' THEN 'N'
+WHEN street_name LIKE '% BOULEVARD WEST' THEN 'W'
+WHEN street_name LIKE '% BLVF W' THEN 'W'
+WHEN street_name LIKE '% BLVD. W.' THEN 'W'
+WHEN street_name LIKE '% LBLVD W' THEN 'W'
+WHEN street_name LIKE '% BLV W' THEN 'W'
+WHEN street_name LIKE '% LBVD W' THEN 'W'
+WHEN street_name LIKE '% BL W' THEN 'W'
+WHEN street_name LIKE '% BLVD N' THEN 'N'
+WHEN street_name LIKE '% BLVD E' THEN 'E'
+WHEN street_name LIKE '% BLVD S' THEN 'S'
+WHEN street_name LIKE '% BLVD SOUTH' THEN 'S'
+WHEN street_name LIKE '% BLVD W' THEN 'W'
+WHEN street_name LIKE '% BLVD WEST' THEN 'W'
+WHEN street_name LIKE '% CRES N' THEN 'N'
+WHEN street_name LIKE '% CRES E' THEN 'E'
+WHEN street_name LIKE '% CRES S' THEN 'S'
+WHEN street_name LIKE '% CRES W' THEN 'W'
+WHEN street_name LIKE '% CRT N' THEN 'N'
+WHEN street_name LIKE '% CRT E' THEN 'E'
+WHEN street_name LIKE '% CRT S' THEN 'S'
+WHEN street_name LIKE '% CRT W' THEN 'W'
+WHEN street_name LIKE '% DR N' THEN 'N'
+WHEN street_name LIKE '% DR E' THEN 'E'
+WHEN street_name LIKE '% DR S' THEN 'S'
+WHEN street_name LIKE '% DR W' THEN 'W'
+WHEN street_name LIKE '% HILL S' THEN 'S'
+WHEN street_name LIKE '% HILL N' THEN 'N'
+WHEN street_name LIKE '% QUAY E' THEN 'E'
+WHEN street_name LIKE '% QUAY W' THEN 'W'
+WHEN street_name LIKE '% RD N' THEN 'N'
+WHEN street_name LIKE '% RD E' THEN 'E'
+WHEN street_name LIKE '% RD S' THEN 'S'
+WHEN street_name LIKE '% RD W' THEN 'W'
+WHEN street_name LIKE '% SQ N' THEN 'N'
+WHEN street_name LIKE '% SQ E' THEN 'E'
+WHEN street_name LIKE '% SQ S' THEN 'S'
+WHEN street_name LIKE '% SQ W' THEN 'W'
+WHEN street_name LIKE '% ST. EAST' THEN 'E'
+WHEN street_name LIKE '% S E' THEN 'E'
+WHEN street_name LIKE '% STE' THEN 'E'
+WHEN street_name LIKE '% S TW' THEN 'W'
+WHEN street_name LIKE '% ST. E.' THEN 'E'
+WHEN street_name LIKE '% ST N' THEN 'N'
+WHEN street_name LIKE '% ST E' THEN 'E'
+WHEN street_name LIKE '% ST EAST' THEN 'E'
+WHEN street_name LIKE '% ST WEST' THEN 'W'
+WHEN street_name LIKE '% ST S' THEN 'S'
+WHEN street_name LIKE '% ST W' THEN 'W'
+WHEN street_name LIKE '% ST. W.' THEN 'W'
+WHEN street_name LIKE '% STREET WEST' THEN 'W'
+WHEN street_name LIKE '% S TE' THEN 'E'
+WHEN street_name LIKE '% S W' THEN 'W'
+WHEN street_name LIKE '% ST WS' THEN 'W'
+WHEN street_name LIKE '% STREET W' THEN 'W'
+WHEN street_name LIKE '% KINGS T E' THEN 'E'
+WHEN street_name LIKE '% KINGS T W' THEN 'W'
+WHEN street_name LIKE '% T W' THEN 'W'
+WHEN street_name LIKE '% STREET EAST' THEN 'E'
+WHEN street_name LIKE '% ST  W' THEN 'W'
+WHEN street_name LIKE '% STREET E' THEN 'E'
+WHEN street_name LIKE '% BLOORST W' THEN 'W'
+WHEN street_name LIKE '% ST  E' THEN 'E'
+WHEN street_name LIKE '% WELELSLEYS T E' THEN 'E'
+WHEN street_name LIKE '% ST. E' THEN 'E'
+WHEN street_name LIKE '% T E' THEN 'E'
+WHEN street_name LIKE '% ST W %' THEN 'W'
+WHEN street_name LIKE '% STW' THEN 'W'
+WHEN street_name LIKE '% QUEEN W' THEN 'W'
+WHEN street_name LIKE '% ST. EAST' THEN 'E'
+ELSE NULL END)
+WHERE clean_address IS NOT NULL;
+-- SELECT COUNT(*) FROM parking_dataset WHERE street_dir IS NOT NULL;
+-- 4,430,316 rows
+
+-- street name clean is used for misspellings i.e. ST CLAIRE AV E should read ST CLAIR AV E
+ALTER TABLE parking_dataset
+ADD COLUMN street_name_clean varchar(255);
+
+UPDATE parking_dataset
+SET street_name_clean = (CASE WHEN street_name LIKE '% REDPATHA V' THEN 'REDPATH'
+WHEN street_name LIKE '%ST CLAIR' THEN 'ST CLAIR'
+WHEN street_name LIKE '%ST CLAIR%' THEN 'ST CLAIR'
+WHEN street_name LIKE '%LAWRENCE%' THEN 'LAWRENCE'
+WHEN street_name LIKE '%EGLINTON' THEN 'EGLINTON'
+WHEN street_name LIKE '% AV EAST' THEN LEFT(street_name, STRPOS(street_name, 'AV EAST') - 2)
+WHEN street_name LIKE '% AV WEST' THEN LEFT(street_name, STRPOS(street_name, 'AV WEST') - 2)
+WHEN street_name LIKE '% AV E' THEN LEFT(street_name, STRPOS(street_name, 'AV E') - 2)
+WHEN street_name LIKE '% AV W' THEN LEFT(street_name, STRPOS(street_name, 'AV W') - 2)
+WHEN street_name LIKE '% A' THEN LEFT(street_name, STRPOS(street_name, ' A') - 1)
+WHEN street_name LIKE '% AV%' THEN LEFT(street_name, STRPOS(street_name, 'AVE') - 2)
+WHEN street_name LIKE '% AV' THEN LEFT(street_name, STRPOS(street_name, 'AV') - 2)
+WHEN street_name LIKE '% AV%E' THEN LEFT(street_name, STRPOS(street_name, 'AV E') - 2)
+WHEN street_name LIKE '% AV%W' THEN LEFT(street_name, STRPOS(street_name, 'AV E') - 2)
+WHEN street_name LIKE '% AVE.' THEN LEFT(street_name, STRPOS(street_name, ' AVE.') - 1)
+WHEN street_name LIKE '% AVE N' THEN LEFT(street_name, STRPOS(street_name, ' AVE N') - 1)
+WHEN street_name LIKE '% AVE E' THEN LEFT(street_name, STRPOS(street_name, ' AVE E') - 1)
+WHEN street_name LIKE '% AVE S' THEN LEFT(street_name, STRPOS(street_name, ' AVE S') - 1)
+WHEN street_name LIKE '% AVE W' THEN LEFT(street_name, STRPOS(street_name, ' AVE W') - 1)
+WHEN street_name LIKE '% AV' THEN LEFT(street_name, STRPOS(street_name, ' AV') - 1)
+WHEN street_name LIKE '% AV E' THEN LEFT(street_name, STRPOS(street_name, ' AV E') - 1)
+WHEN street_name LIKE '% AV W' THEN LEFT(street_name, STRPOS(street_name, ' AV W') - 1)
+WHEN street_name LIKE '% AV WEST' THEN LEFT(street_name, STRPOS(street_name, ' AV WEST') - 1)
+WHEN street_name LIKE '% AVE. W.' THEN LEFT(street_name, STRPOS(street_name, ' AVE. W.') - 1)
+WHEN street_name LIKE '% AVENUE' THEN LEFT(street_name, STRPOS(street_name, ' AVENUE') - 1)
+WHEN street_name LIKE '% AVENUE WEST' THEN LEFT(street_name, STRPOS(street_name, ' AVENUE WEST') - 1)
+WHEN street_name LIKE '% AVE WEST' THEN LEFT(street_name, STRPOS(street_name, ' AVE WEST') - 1)
+WHEN street_name LIKE '% AVE   W/S' THEN LEFT(street_name, STRPOS(street_name, ' AVE   W/S') - 1)
+WHEN street_name LIKE '% VE' THEN LEFT(street_name, STRPOS(street_name, ' VE') - 1)
+WHEN street_name LIKE '% AVE UN 101' THEN LEFT(street_name, STRPOS(street_name, ' AVE UN 101') - 1)
+WHEN street_name LIKE '% AVE UN 102' THEN LEFT(street_name, STRPOS(street_name, ' AVE UN 102') - 1)
+WHEN street_name LIKE '% AVR' THEN LEFT(street_name, STRPOS(street_name, ' AVR') - 1)
+WHEN street_name LIKE '% AVE N/S' THEN LEFT(street_name, STRPOS(street_name, ' AVE N/S') - 1)
+WHEN street_name LIKE '% AV EAST' THEN LEFT(street_name, STRPOS(street_name, ' AV EAST') - 1)
+WHEN street_name LIKE '% AVE EAST' THEN LEFT(street_name, STRPOS(street_name, ' AVE EAST') - 1)
+WHEN street_name LIKE '% VE E' THEN LEFT(street_name, STRPOS(street_name, ' VE E') - 1)
+WHEN street_name LIKE '% AV #16' THEN LEFT(street_name, STRPOS(street_name, ' AV #16') - 1)
+WHEN street_name LIKE '% AV UNIT #1 ' THEN LEFT(street_name, STRPOS(street_name, ' AV UNIT #1 ') - 1)
+WHEN street_name LIKE '% AV UNIT #31' THEN LEFT(street_name, STRPOS(street_name, ' AV UNIT #31') - 1)
+WHEN street_name LIKE '% AVE UN 25' THEN LEFT(street_name, STRPOS(street_name, ' AVE UN 25') - 1)
+WHEN street_name LIKE '% VAE' THEN LEFT(street_name, STRPOS(street_name, ' VAE') - 1)
+WHEN street_name LIKE '% AVE LINE.' THEN LEFT(street_name, STRPOS(street_name, ' AVE LINE.') - 1)
+WHEN street_name LIKE '% AVE  E#2' THEN LEFT(street_name, STRPOS(street_name, ' AVE  E#2') - 1)
+WHEN street_name LIKE '% AVE GARAGE #31' THEN LEFT(street_name, STRPOS(street_name, ' AVE GARAGE #31') - 1)
+WHEN street_name LIKE '% FINCHAV W ' THEN LEFT(street_name, STRPOS(street_name, ' FINCHAV W ') - 1)
+WHEN street_name LIKE '% AVEE' THEN LEFT(street_name, STRPOS(street_name, ' AVEE') - 1)
+WHEN street_name LIKE '% AE' THEN LEFT(street_name, STRPOS(street_name, ' AE') - 1)
+WHEN street_name LIKE '% AVE3' THEN LEFT(street_name, STRPOS(street_name, ' AVE3') - 1)
+WHEN street_name LIKE '% AVE3' THEN 'DANFORTH'
+WHEN street_name LIKE '%  DANFORTHA V' THEN 'PROGRESS'
+WHEN street_name LIKE '% PROGRESS AE' THEN 'EGLINTON'
+WHEN street_name LIKE '% EGLINTON W' THEN 'SHEPPARD'
+WHEN street_name LIKE '% SHEPPARD WEST' THEN 'SHEPPARD'
+WHEN street_name LIKE '% V W' THEN LEFT(street_name, STRPOS(street_name, ' V W') - 1)
+WHEN street_name LIKE '% AV % 34' THEN LEFT(street_name, STRPOS(street_name, ' AV % 34') - 1)
+WHEN street_name LIKE '% AV % 34' THEN 'CLARENDON'
+WHEN street_name LIKE '% AVENUE W' THEN LEFT(street_name, STRPOS(street_name, ' AVENUE W') - 1)
+WHEN street_name LIKE '% AVE. W' THEN LEFT(street_name, STRPOS(street_name, ' AVE. W') - 1)
+WHEN street_name LIKE '% A V' THEN LEFT(street_name, STRPOS(street_name, ' A V') - 1)
+WHEN street_name LIKE '% A VW' THEN LEFT(street_name, STRPOS(street_name, ' A VW') - 1)
+WHEN street_name LIKE '% AE W' THEN LEFT(street_name, STRPOS(street_name, ' AE W') - 1)
+WHEN street_name LIKE '% AVE. W ' THEN LEFT(street_name, STRPOS(street_name, ' AVE. W ') - 1)
+WHEN street_name LIKE '% AVE.W' THEN LEFT(street_name, STRPOS(street_name, ' AVE.W') - 1)
+WHEN street_name LIKE '% AVE.W.' THEN LEFT(street_name, STRPOS(street_name, ' AVE.W.') - 1)
+WHEN street_name LIKE '% VE W' THEN LEFT(street_name, STRPOS(street_name, ' VE W') - 1)
+WHEN street_name LIKE '% VE W' THEN 'SHEPPARD'
+WHEN street_name LIKE '% AVENUE EAST' THEN LEFT(street_name, STRPOS(street_name, ' AVENUE EAST') - 1)
+WHEN street_name LIKE '% AVENUE E' THEN LEFT(street_name, STRPOS(street_name, ' AVENUE E') - 1)
+WHEN street_name LIKE '% AVE W  NR 5' THEN LEFT(street_name, STRPOS(street_name, ' AVE W  NR 5') - 1)
+WHEN street_name LIKE '% AVE W  NR 8' THEN LEFT(street_name, STRPOS(street_name, ' AVE W  NR 8') - 1)
+WHEN street_name LIKE '% AVE W NR 22' THEN LEFT(street_name, STRPOS(street_name, ' AVE W NR 22') - 1)
+WHEN street_name LIKE '% AVE W NR 22' THEN 'PHARMACY'
+WHEN street_name LIKE '% AEV' THEN LEFT(street_name, STRPOS(street_name, ' AEV') - 1)
+WHEN street_name LIKE '% AEV' THEN 'BENSON'
+WHEN street_name LIKE '% BENSONA V' THEN 'LAWRENCE'
+WHEN street_name LIKE '% LAWRENCE W' THEN 'BISHOP'
+WHEN street_name LIKE '% BISHOPA V' THEN 'JEFFERSON'
+WHEN street_name LIKE '% JEFFERSONA V' THEN 'FRASER'
+WHEN street_name LIKE '% FRASERAV' THEN 'LAWRENCE'
+WHEN street_name LIKE '% LAWRENCEAV W' THEN 'HANNA'
+WHEN street_name LIKE '% AVE' THEN LEFT(street_name, STRPOS(street_name, ' AVE') - 1)
+WHEN street_name LIKE '% BYWY' THEN LEFT(street_name, STRPOS(street_name, ' BYWY') - 1)
+WHEN street_name LIKE '% BYWY' THEN 'BLVD'
+WHEN street_name LIKE '% BL N' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD NORTH' THEN 'BLVD'
+WHEN street_name LIKE '% BLVD UNIT #63' THEN LEFT(street_name, STRPOS(street_name, ' BLVD UNIT #63') - 1)
+WHEN street_name LIKE '% BLVD UNIT #62' THEN LEFT(street_name, STRPOS(street_name, ' BLVD UNIT #62') - 1)
+WHEN street_name LIKE '% BLVD UNIT #46' THEN LEFT(street_name, STRPOS(street_name, ' BLVD UNIT #46') - 1)
+WHEN street_name LIKE '% BLVD UNIT #48' THEN LEFT(street_name, STRPOS(street_name, ' BLVD UNIT #48') - 1)
+WHEN street_name LIKE '% BLVD UNIT #41' THEN LEFT(street_name, STRPOS(street_name, ' BLVD UNIT #41') - 1)
+WHEN street_name LIKE '% BLVD UNIT #38' THEN LEFT(street_name, STRPOS(street_name, ' BLVD UNIT #38') - 1)
+WHEN street_name LIKE '% BLVD UNIT #32' THEN LEFT(street_name, STRPOS(street_name, ' BLVD UNIT #32') - 1)
+WHEN street_name LIKE '% BLVD UNIT #61' THEN LEFT(street_name, STRPOS(street_name, ' BLVD UNIT #61') - 1)
+WHEN street_name LIKE '% BVD' THEN LEFT(street_name, STRPOS(street_name, ' BVD') - 1)
+WHEN street_name LIKE '% BOULEVARD WEST' THEN LEFT(street_name, STRPOS(street_name, ' BOULEVARD WEST') - 1)
+WHEN street_name LIKE '% BLVF W' THEN LEFT(street_name, STRPOS(street_name, ' BLVF W') - 1)
+WHEN street_name LIKE '% BLVD. W.' THEN LEFT(street_name, STRPOS(street_name, ' BLVD. W.') - 1)
+WHEN street_name LIKE '% BLDV' THEN LEFT(street_name, STRPOS(street_name, ' BLDV') - 1)
+WHEN street_name LIKE '% LBLVD W' THEN LEFT(street_name, STRPOS(street_name, ' LBLVD W') - 1)
+WHEN street_name LIKE '% BLV W' THEN LEFT(street_name, STRPOS(street_name, ' BLV W') - 1)
+WHEN street_name LIKE '% BLVD #33' THEN LEFT(street_name, STRPOS(street_name, ' BLVD #33') - 1)
+WHEN street_name LIKE '% LBVD W' THEN LEFT(street_name, STRPOS(street_name, ' LBVD W') - 1)
+WHEN street_name LIKE '% BLV' THEN LEFT(street_name, STRPOS(street_name, ' BLV') - 1)
+WHEN street_name LIKE '% BL' THEN LEFT(street_name, STRPOS(street_name, ' BL') - 1)
+WHEN street_name LIKE '% BL W' THEN LEFT(street_name, STRPOS(street_name, ' BL W') - 1)
+WHEN street_name LIKE '% BLVD.' THEN LEFT(street_name, STRPOS(street_name, ' BLVD.') - 1)
+WHEN street_name LIKE '% BVLD' THEN LEFT(street_name, STRPOS(street_name, ' BVLD') - 1)
+WHEN street_name LIKE '% BLVD' THEN LEFT(street_name, STRPOS(street_name, ' BLVD') - 1)
+WHEN street_name LIKE '% BLVD N' THEN LEFT(street_name, STRPOS(street_name, ' BLVD N') - 1)
+WHEN street_name LIKE '% BLVD E' THEN LEFT(street_name, STRPOS(street_name, ' BLVD E') - 1)
+WHEN street_name LIKE '% BLVD S' THEN LEFT(street_name, STRPOS(street_name, ' BLVD S') - 1)
+WHEN street_name LIKE '% BLVD SOUTH' THEN LEFT(street_name, STRPOS(street_name, ' BLVD SOUTH') - 1)
+WHEN street_name LIKE '% BLVD W' THEN LEFT(street_name, STRPOS(street_name, ' BLVD W') - 1)
+WHEN street_name LIKE '% BLVD WEST' THEN LEFT(street_name, STRPOS(street_name, ' BLVD WEST') - 1)
+WHEN street_name LIKE '% BL NR%' THEN LEFT(street_name, STRPOS(street_name, ' BL NR%') - 1)
+WHEN street_name LIKE '% BLVD UNIT #36' THEN LEFT(street_name, STRPOS(street_name, ' BLVD UNIT #36') - 1)
+WHEN street_name LIKE '% BLVD UNIT #69' THEN LEFT(street_name, STRPOS(street_name, ' BLVD UNIT #69') - 1)
+WHEN street_name LIKE '% BL UN 32' THEN LEFT(street_name, STRPOS(street_name, ' BL UN 32') - 1)
+WHEN street_name LIKE '% CIR' THEN LEFT(street_name, STRPOS(street_name, ' CIR') - 1)
+WHEN street_name LIKE '% CIRCLE' THEN LEFT(street_name, STRPOS(street_name, ' CIRCLE') - 1)
+WHEN street_name LIKE '% CRCL' THEN LEFT(street_name, STRPOS(street_name, ' CRCL') - 1)
+WHEN street_name LIKE '% CIRT' THEN LEFT(street_name, STRPOS(street_name, ' CIRT') - 1)
+WHEN street_name LIKE '% CIRCUIT' THEN LEFT(street_name, STRPOS(street_name, ' CIRCUIT') - 1)
+WHEN street_name LIKE '% CRCT' THEN LEFT(street_name, STRPOS(street_name, ' CRCT') - 1)
+WHEN street_name LIKE '% CRESENT' THEN LEFT(street_name, STRPOS(street_name, ' CRESENT') - 1)
+WHEN street_name LIKE '% CRES.' THEN LEFT(street_name, STRPOS(street_name, ' CRES.') - 1)
+WHEN street_name LIKE '% CRE' THEN LEFT(street_name, STRPOS(street_name, ' CRE') - 1)
+WHEN street_name LIKE '% CR' THEN LEFT(street_name, STRPOS(street_name, ' CR') - 1)
+WHEN street_name LIKE '% CRESCENT' THEN LEFT(street_name, STRPOS(street_name, ' CRESCENT') - 1)
+WHEN street_name LIKE '% CRES' THEN LEFT(street_name, STRPOS(street_name, ' CRES') - 1)
+WHEN street_name LIKE '% CRES N' THEN LEFT(street_name, STRPOS(street_name, ' CRES N') - 1)
+WHEN street_name LIKE '% CRES E' THEN LEFT(street_name, STRPOS(street_name, ' CRES E') - 1)
+WHEN street_name LIKE '% CRES S' THEN LEFT(street_name, STRPOS(street_name, ' CRES S') - 1)
+WHEN street_name LIKE '% CRES W' THEN LEFT(street_name, STRPOS(street_name, ' CRES W') - 1)
+WHEN street_name LIKE '% CRS' THEN LEFT(street_name, STRPOS(street_name, ' CRS') - 1)
+WHEN street_name LIKE '% CREST' THEN LEFT(street_name, STRPOS(street_name, ' CREST') - 1)
+WHEN street_name LIKE '% CT.' THEN LEFT(street_name, STRPOS(street_name, ' CT.') - 1)
+WHEN street_name LIKE '% COURT' THEN LEFT(street_name, STRPOS(street_name, ' COURT') - 1)
+WHEN street_name LIKE '% CRT.' THEN LEFT(street_name, STRPOS(street_name, ' CRT.') - 1)
+WHEN street_name LIKE '% CRT' THEN LEFT(street_name, STRPOS(street_name, ' CRT') - 1)
+WHEN street_name LIKE '% CRT N' THEN LEFT(street_name, STRPOS(street_name, ' CRT N') - 1)
+WHEN street_name LIKE '% CRT E' THEN LEFT(street_name, STRPOS(street_name, ' CRT E') - 1)
+WHEN street_name LIKE '% CRT S' THEN LEFT(street_name, STRPOS(street_name, ' CRT S') - 1)
+WHEN street_name LIKE '% CRT W' THEN LEFT(street_name, STRPOS(street_name, ' CRT W') - 1)
+WHEN street_name LIKE '% CS' THEN LEFT(street_name, STRPOS(street_name, ' CS') - 1)
+WHEN street_name LIKE '% CT' THEN LEFT(street_name, STRPOS(street_name, ' CT') - 1)
+WHEN street_name LIKE '% DR.' THEN LEFT(street_name, STRPOS(street_name, ' DR.') - 1)
+WHEN street_name LIKE '% DRIVE  S/S' THEN LEFT(street_name, STRPOS(street_name, ' DRIVE  S/S') - 1)
+WHEN street_name LIKE '% DR W/S' THEN LEFT(street_name, STRPOS(street_name, ' DR W/S') - 1)
+WHEN street_name LIKE '% DRIVE' THEN LEFT(street_name, STRPOS(street_name, ' DRIVE') - 1)
+WHEN street_name LIKE '% DR' THEN LEFT(street_name, STRPOS(street_name, ' DR') - 1)
+WHEN street_name LIKE '% DR N' THEN LEFT(street_name, STRPOS(street_name, ' DR N') - 1)
+WHEN street_name LIKE '% DR E' THEN LEFT(street_name, STRPOS(street_name, ' DR E') - 1)
+WHEN street_name LIKE '% DR S' THEN LEFT(street_name, STRPOS(street_name, ' DR S') - 1)
+WHEN street_name LIKE '% DR W' THEN LEFT(street_name, STRPOS(street_name, ' DR W') - 1)
+WHEN street_name LIKE '% DR N/S' THEN LEFT(street_name, STRPOS(street_name, ' DR N/S') - 1)
+WHEN street_name LIKE '% DR S/S' THEN LEFT(street_name, STRPOS(street_name, ' DR S/S') - 1)
+WHEN street_name LIKE '% DRV' THEN LEFT(street_name, STRPOS(street_name, ' DRV') - 1)
+WHEN street_name LIKE '% GDN' THEN LEFT(street_name, STRPOS(street_name, ' GDN') - 1)
+WHEN street_name LIKE '% GARDENS' THEN LEFT(street_name, STRPOS(street_name, ' GARDENS') - 1)
+WHEN street_name LIKE '% GRDNS' THEN LEFT(street_name, STRPOS(street_name, ' GRDNS') - 1)
+WHEN street_name LIKE '% GDNS' THEN LEFT(street_name, STRPOS(street_name, ' GDNS') - 1)
+WHEN street_name LIKE '% GRN' THEN LEFT(street_name, STRPOS(street_name, ' GRN') - 1)
+WHEN street_name LIKE '% GR' THEN LEFT(street_name, STRPOS(street_name, ' GR') - 1)
+WHEN street_name LIKE '% GRV' THEN LEFT(street_name, STRPOS(street_name, ' GRV') - 1)
+WHEN street_name LIKE '% GROVE' THEN LEFT(street_name, STRPOS(street_name, ' GROVE') - 1)
+WHEN street_name LIKE '% GATE' THEN LEFT(street_name, STRPOS(street_name, ' GATE') - 1)
+WHEN street_name LIKE '% GT' THEN LEFT(street_name, STRPOS(street_name, ' GT') - 1)
+WHEN street_name LIKE '% HILL' THEN LEFT(street_name, STRPOS(street_name, ' HILL') - 1)
+WHEN street_name LIKE '% HILLS' THEN LEFT(street_name, STRPOS(street_name, ' HILLS') - 1)
+WHEN street_name LIKE '% HILL S' THEN LEFT(street_name, STRPOS(street_name, ' HILL S') - 1)
+WHEN street_name LIKE '% HILL N' THEN LEFT(street_name, STRPOS(street_name, ' HILL N') - 1)
+WHEN street_name LIKE '% HEIGHTS' THEN LEFT(street_name, STRPOS(street_name, ' HEIGHTS') - 1)
+WHEN street_name LIKE '% HTS' THEN LEFT(street_name, STRPOS(street_name, ' HTS') - 1)
+WHEN street_name LIKE '% KEEP' THEN LEFT(street_name, STRPOS(street_name, ' KEEP') - 1)
+WHEN street_name LIKE '% LN' THEN LEFT(street_name, STRPOS(street_name, ' LN') - 1)
+WHEN street_name LIKE '% LA' THEN LEFT(street_name, STRPOS(street_name, ' LA') - 1)
+WHEN street_name LIKE '% LANE' THEN LEFT(street_name, STRPOS(street_name, ' LANE') - 1)
+WHEN street_name LIKE '% LANEWAY' THEN LEFT(street_name, STRPOS(street_name, ' LANEWAY') - 1)
+WHEN street_name LIKE '% LINE' THEN LEFT(street_name, STRPOS(street_name, ' LINE') - 1)
+WHEN street_name LIKE '% LWN' THEN LEFT(street_name, STRPOS(street_name, ' LWN') - 1)
+WHEN street_name LIKE '% MEWS' THEN LEFT(street_name, STRPOS(street_name, ' MEWS') - 1)
+WHEN street_name LIKE '% PATH' THEN LEFT(street_name, STRPOS(street_name, ' PATH') - 1)
+WHEN street_name LIKE '% PATHWAY' THEN LEFT(street_name, STRPOS(street_name, ' PATHWAY') - 1)
+WHEN street_name LIKE '% PARK' THEN LEFT(street_name, STRPOS(street_name, ' PARK') - 1)
+WHEN street_name LIKE '% PK' THEN LEFT(street_name, STRPOS(street_name, ' PK') - 1)
+WHEN street_name LIKE '% PKWY' THEN LEFT(street_name, STRPOS(street_name, ' PKWY') - 1)
+WHEN street_name LIKE '% PLACE' THEN LEFT(street_name, STRPOS(street_name, ' PLACE') - 1)
+WHEN street_name LIKE '% PL' THEN LEFT(street_name, STRPOS(street_name, ' PL') - 1)
+WHEN street_name LIKE '% PTWY' THEN LEFT(street_name, STRPOS(street_name, ' PTWY') - 1)
+WHEN street_name LIKE '% PTY' THEN LEFT(street_name, STRPOS(street_name, ' PTY') - 1)
+WHEN street_name LIKE '% QUAY' THEN LEFT(street_name, STRPOS(street_name, ' QUAY') - 1)
+WHEN street_name LIKE '% QUAY E' THEN LEFT(street_name, STRPOS(street_name, ' QUAY E') - 1)
+WHEN street_name LIKE '% QUAY W' THEN LEFT(street_name, STRPOS(street_name, ' QUAY W') - 1)
+WHEN street_name LIKE '% ROAD' THEN LEFT(street_name, STRPOS(street_name, ' ROAD') - 1)
+WHEN street_name LIKE '% HILLR D' THEN LEFT(street_name, STRPOS(street_name, ' HILLR D') - 1)
+WHEN street_name LIKE '% RD  E/S' THEN LEFT(street_name, STRPOS(street_name, ' RD  E/S') - 1)
+WHEN street_name LIKE '% RD' THEN LEFT(street_name, STRPOS(street_name, ' RD') - 1)
+WHEN street_name LIKE '% RD.' THEN LEFT(street_name, STRPOS(street_name, ' RD.') - 1)
+WHEN street_name LIKE '% RD N' THEN LEFT(street_name, STRPOS(street_name, ' RD N') - 1)
+WHEN street_name LIKE '% RD E' THEN LEFT(street_name, STRPOS(street_name, ' RD E') - 1)
+WHEN street_name LIKE '% RD S' THEN LEFT(street_name, STRPOS(street_name, ' RD S') - 1)
+WHEN street_name LIKE '% RD W' THEN LEFT(street_name, STRPOS(street_name, ' RD W') - 1)
+WHEN street_name LIKE '% RD SB' THEN LEFT(street_name, STRPOS(street_name, ' RD SB') - 1)
+WHEN street_name LIKE '% RD  #2' THEN LEFT(street_name, STRPOS(street_name, ' RD  #2') - 1)
+WHEN street_name LIKE '% RD  #4' THEN LEFT(street_name, STRPOS(street_name, ' RD  #4') - 1)
+WHEN street_name LIKE '% RD  #90' THEN LEFT(street_name, STRPOS(street_name, ' RD  #90') - 1)
+WHEN street_name LIKE '% RAOD' THEN LEFT(street_name, STRPOS(street_name, ' RAOD') - 1)
+WHEN street_name LIKE '% RD ES' THEN LEFT(street_name, STRPOS(street_name, ' RD ES') - 1)
+WHEN street_name LIKE '% RD W/S' THEN LEFT(street_name, STRPOS(street_name, ' RD W/S') - 1)
+WHEN street_name LIKE '% R' THEN LEFT(street_name, STRPOS(street_name, ' R') - 1)
+WHEN street_name LIKE '% R' THEN 'KINGSTON'
+WHEN street_name LIKE '% KINGSTONR D' THEN 'MCCOWAN'
+WHEN street_name LIKE '% MCCOWNR D' THEN 'WESTON'
+WHEN street_name LIKE '% WESTONR D ' THEN 'KENNEDY'
+WHEN street_name LIKE '% RD SPOT 56' THEN LEFT(street_name, STRPOS(street_name, ' RD SPOT 56') - 1)
+WHEN street_name LIKE '% RD SPOT 56' THEN 'LLOYD MANOR'
+WHEN street_name LIKE '% LLOYD MANOR D' THEN 'SENTINEL'
+WHEN street_name LIKE '% SENTINELLR D ' THEN 'DON MILLS'
+WHEN street_name LIKE '% DON MILLS D' THEN 'DON MILLS'
+WHEN street_name LIKE '% DON MILLS RD 3' THEN 'DON MILLS'
+WHEN street_name LIKE '% DON MILLSR D' THEN 'DON MILLS'
+WHEN street_name LIKE '% DON MILL SRD' THEN 'DON MILLS'
+WHEN street_name LIKE '% DON MILLSR D' THEN 'KENNEDY'
+WHEN street_name LIKE '% KENNEDYR D' THEN 'WESTON'
+WHEN street_name LIKE '% RD%3' THEN LEFT(street_name, STRPOS(street_name, ' RD%3') - 1)
+WHEN street_name LIKE '% RD%3' THEN 'MARKHAM'
+WHEN street_name LIKE '% SQUARE' THEN LEFT(street_name, STRPOS(street_name, ' SQUARE') - 1)
+WHEN street_name LIKE '% RD N%S' THEN LEFT(street_name, STRPOS(street_name, ' RD N%S') - 1)
+WHEN street_name LIKE '% RD N%S' THEN 'WESTON'
+WHEN street_name LIKE '% SQ' THEN LEFT(street_name, STRPOS(street_name, ' SQ') - 1)
+WHEN street_name LIKE '% SQ N' THEN LEFT(street_name, STRPOS(street_name, ' SQ N') - 1)
+WHEN street_name LIKE '% SQ E' THEN LEFT(street_name, STRPOS(street_name, ' SQ E') - 1)
+WHEN street_name LIKE '% SQ S' THEN LEFT(street_name, STRPOS(street_name, ' SQ S') - 1)
+WHEN street_name LIKE '% SQ W' THEN LEFT(street_name, STRPOS(street_name, ' SQ W') - 1)
+WHEN street_name LIKE '% SQ W' THEN 'YONGE'
+WHEN street_name LIKE '% YONGE T' THEN 'YONGE'
+WHEN street_name LIKE '% YONGES T' THEN 'HURON'
+WHEN street_name LIKE '% ST W%S' THEN LEFT(street_name, STRPOS(street_name, ' ST W%S') - 1)
+WHEN street_name LIKE '% ST. EAST' THEN LEFT(street_name, STRPOS(street_name, ' ST. EAST') - 1)
+WHEN street_name LIKE '% S E' THEN LEFT(street_name, STRPOS(street_name, ' S E') - 1)
+WHEN street_name LIKE '% S E' THEN 'HOLLY'
+WHEN street_name LIKE '% ST BACKLOT' THEN LEFT(street_name, STRPOS(street_name, ' ST BACKLOT') - 1)
+WHEN street_name LIKE '% ST BACKLOT' THEN 'ELIZABETH'
+WHEN street_name LIKE '% ST F' THEN LEFT(street_name, STRPOS(street_name, ' ST F') - 1)
+WHEN street_name LIKE '% S' THEN LEFT(street_name, STRPOS(street_name, ' S') - 1)
+WHEN street_name LIKE '% STE' THEN LEFT(street_name, STRPOS(street_name, ' STE') - 1)
+WHEN street_name LIKE '% S TW' THEN LEFT(street_name, STRPOS(street_name, ' S TW') - 1)
+WHEN street_name LIKE '% ST.' THEN LEFT(street_name, STRPOS(street_name, ' ST.') - 1)
+WHEN street_name LIKE '% ST. E.' THEN LEFT(street_name, STRPOS(street_name, ' ST. E.') - 1)
+WHEN street_name LIKE '% ST' THEN LEFT(street_name, STRPOS(street_name, ' ST') - 1)
+WHEN street_name LIKE '% ST N' THEN LEFT(street_name, STRPOS(street_name, ' ST N') - 1)
+WHEN street_name LIKE '% ST E' THEN LEFT(street_name, STRPOS(street_name, ' ST E') - 1)
+WHEN street_name LIKE '% ST EAST' THEN LEFT(street_name, STRPOS(street_name, ' ST EAST') - 1)
+WHEN street_name LIKE '% ST WEST' THEN LEFT(street_name, STRPOS(street_name, ' ST WEST') - 1)
+WHEN street_name LIKE '% ST S' THEN LEFT(street_name, STRPOS(street_name, ' ST S') - 1)
+WHEN street_name LIKE '% ST W' THEN LEFT(street_name, STRPOS(street_name, ' ST W') - 1)
+WHEN street_name LIKE '% ST. W.' THEN LEFT(street_name, STRPOS(street_name, ' ST. W.') - 1)
+WHEN street_name LIKE '% STREET WEST' THEN LEFT(street_name, STRPOS(street_name, ' STREET WEST') - 1)
+WHEN street_name LIKE '% STREET' THEN LEFT(street_name, STRPOS(street_name, ' STREET') - 1)
+WHEN street_name LIKE '% S TE' THEN LEFT(street_name, STRPOS(street_name, ' S TE') - 1)
+WHEN street_name LIKE '% ST W N/S' THEN LEFT(street_name, STRPOS(street_name, ' ST W N/S') - 1)
+WHEN street_name LIKE '% S W' THEN LEFT(street_name, STRPOS(street_name, ' S W') - 1)
+WHEN street_name LIKE '% ST WS' THEN LEFT(street_name, STRPOS(street_name, ' ST WS') - 1)
+WHEN street_name LIKE '% STREET W' THEN LEFT(street_name, STRPOS(street_name, ' STREET W') - 1)
+WHEN street_name LIKE '% STREET W' THEN 'KING'
+WHEN street_name LIKE '% KINGS T E' THEN 'KING'
+WHEN street_name LIKE '% T W' THEN LEFT(street_name, STRPOS(street_name, ' T W') - 1)
+WHEN street_name LIKE '% ST E/S' THEN LEFT(street_name, STRPOS(street_name, ' ST E/S') - 1)
+WHEN street_name LIKE '% ST E/S' THEN 'SUMACH'
+WHEN street_name LIKE '% SST' THEN LEFT(street_name, STRPOS(street_name, ' SST') - 1)
+WHEN street_name LIKE '% ST ES' THEN LEFT(street_name, STRPOS(street_name, ' ST ES') - 1)
+WHEN street_name LIKE '% ST W NS' THEN LEFT(street_name, STRPOS(street_name, ' ST W NS') - 1)
+WHEN street_name LIKE '% ST N/S' THEN LEFT(street_name, STRPOS(street_name, ' ST N/S') - 1)
+WHEN street_name LIKE '% STREET EAST' THEN LEFT(street_name, STRPOS(street_name, ' STREET EAST') - 1)
+WHEN street_name LIKE '% STR' THEN LEFT(street_name, STRPOS(street_name, ' STR') - 1)
+WHEN street_name LIKE '% ST  W' THEN LEFT(street_name, STRPOS(street_name, ' ST  W') - 1)
+WHEN street_name LIKE '% ST  W' THEN 'SPADINA'
+WHEN street_name LIKE '% STREET E' THEN LEFT(street_name, STRPOS(street_name, ' STREET E') - 1)
+WHEN street_name LIKE '% STREET E' THEN 'BLOOR'
+WHEN street_name LIKE '% BLOORST W' THEN 'YONGE'
+WHEN street_name LIKE '% STREET   N3-03 - N3-04' THEN LEFT(street_name, STRPOS(street_name, ' STREET   N3-03 - N3-04') - 1)
+WHEN street_name LIKE '% ST  E' THEN LEFT(street_name, STRPOS(street_name, ' ST  E') - 1)
+WHEN street_name LIKE '% ST E%B' THEN LEFT(street_name, STRPOS(street_name, ' ST E%B') - 1)
+WHEN street_name LIKE '% ST E%B' THEN 'MERTON'
+WHEN street_name LIKE '% ST 3' THEN LEFT(street_name, STRPOS(street_name, ' ST 3') - 1)
+WHEN street_name LIKE '% ST 3' THEN 'SHERBOURNE'
+WHEN street_name LIKE '% SHERBOURNE T' THEN 'WELLESLEY'
+WHEN street_name LIKE '% ST. E' THEN LEFT(street_name, STRPOS(street_name, ' ST. E') - 1)
+WHEN street_name LIKE '% T E' THEN LEFT(street_name, STRPOS(street_name, ' T E') - 1)
+WHEN street_name LIKE '% ST W %' THEN LEFT(street_name, STRPOS(street_name, ' ST W %') - 1)
+WHEN street_name LIKE '% STW' THEN LEFT(street_name, STRPOS(street_name, ' STW') - 1)
+WHEN street_name LIKE '% STW' THEN 'QUEEN'
+WHEN street_name LIKE '% ST. EAST' THEN LEFT(street_name, STRPOS(street_name, ' ST. EAST') - 1)
+WHEN street_name LIKE '% ST W%S' THEN LEFT(street_name, STRPOS(street_name, ' ST W%S') - 1)
+WHEN street_name LIKE '% ST S%S' THEN LEFT(street_name, STRPOS(street_name, ' ST S%S') - 1)
+WHEN street_name LIKE '% ST S%S' THEN 'ELIZABETH'
+WHEN street_name LIKE '% ST #114' THEN LEFT(street_name, STRPOS(street_name, ' ST #114') - 1)
+WHEN street_name LIKE '% TERRACE' THEN LEFT(street_name, STRPOS(street_name, ' TERRACE') - 1)
+WHEN street_name LIKE '% TERR' THEN LEFT(street_name, STRPOS(street_name, ' TERR') - 1)
+WHEN street_name LIKE '% TER' THEN LEFT(street_name, STRPOS(street_name, ' TER') - 1)
+WHEN street_name LIKE '% TRAIL' THEN LEFT(street_name, STRPOS(street_name, ' TRAIL') - 1)
+WHEN street_name LIKE '% TRL' THEN LEFT(street_name, STRPOS(street_name, ' TRL') - 1)
+WHEN street_name LIKE '% TR' THEN LEFT(street_name, STRPOS(street_name, ' TR') - 1)
+WHEN street_name LIKE '% WALK' THEN LEFT(street_name, STRPOS(street_name, ' WALK') - 1)
+WHEN street_name LIKE '% WAY #75' THEN LEFT(street_name, STRPOS(street_name, ' WAY #75') - 1)
+WHEN street_name LIKE '% WAY' THEN LEFT(street_name, STRPOS(street_name, ' WAY') - 1)
+WHEN street_name LIKE '% WAY  TH #4' THEN LEFT(street_name, STRPOS(street_name, ' WAY  TH #4') - 1)
+WHEN street_name LIKE '% WDS' THEN LEFT(street_name, STRPOS(street_name, ' WDS') - 1)
+ELSE NULL END)
+WHERE clean_address IS NOT NULL;
+
+-- SELECT location1, location2, location3, location4, clean_address, street_num, street_name_clean, street_type , street_dir 
+-- FROM parking_dataset 
+-- WHERE clean_address IS NOT NULL LIMIT 5;
+
+-- after all the cleaning has been made to the street num, street name, street_type, street_dir, create a new address for joining with toronto address table
+ALTER TABLE parking_dataset
+ADD COLUMN match_address varchar(255);
+
+UPDATE parking_dataset
+SET match_address = (CASE WHEN street_num IS NOT NULL AND street_name_clean IS NOT NULL AND street_type IS NULL AND street_dir IS NULL THEN street_name_clean 
+WHEN street_num IS NOT NULL AND street_name_clean IS NOT NULL AND street_type IS NOT NULL AND street_dir IS NULL THEN street_name_clean || ' ' || street_type
+WHEN street_num IS NOT NULL AND street_name_clean IS NOT NULL AND street_type IS NOT NULL AND street_dir IS NOT NULL THEN street_name_clean || ' ' || street_type || ' ' || street_dir ELSE NULL END)
+WHERE clean_address IS NOT NULL;
+
+-- SELECT location1, location2, location3, location4, clean_address, street_num, street_name_clean, street_type , street_dir, match_address 
+-- FROM parking_dataset 
+-- WHERE match_address IS NOT NULL LIMIT 25;
+
+-- while we have cleaned up the majority of addresses for joining, there are adressess within the clean_address field that were not included as part of the 
+-- match address results. This is due to the fact that these street names do not include a street type (i.e THE ESPLANADE, NEEDLE FIRWAY)
+-- there are currently 232,726 of these records that exist
+-- SELECT COUNT(*) FROM parking_dataset WHERE match_address IS NULL AND clean_address IS NOT NULL;
+
+UPDATE parking_dataset
+SET match_address = SUBSTRING(clean_address, POSITION(' ' in clean_address)+1)
+WHERE match_address IS NULL AND clean_address IS NOT NULL AND clean_address LIKE '%WAY%';
+
+-- 78,322 rows updated
+
+UPDATE parking_dataset
+SET match_address = 'THE WEST MALL'
+WHERE match_address IS NULL AND clean_address IS NOT NULL AND clean_address LIKE '%WEST MALL%';
+#40,697 rows updated
+
+UPDATE parking_dataset
+SET match_address = 'THE EAST MALL'
+WHERE match_address IS NULL AND clean_address IS NOT NULL AND clean_address LIKE '%EAST MALL%';
+-- 7,681 rows updated
+
+UPDATE parking_dataset
+SET match_address = 'THE ESPLANADE'
+WHERE match_address IS NULL AND clean_address IS NOT NULL AND clean_address LIKE '%LANADE%';
+-- 65,373 rows updated
+
+UPDATE parking_dataset
+SET match_address = 'YONGE ST'
+WHERE match_address IS NULL AND clean_address IS NOT NULL AND clean_address LIKE '%YONG%';
+-- 323 rows updated
+
+UPDATE parking_dataset
+SET match_address = REPLACE(match_address, '  AVE', ' AVE')
+WHERE match_address LIKE '%  AVE%';
+-- 144,707 rows updated
+
+-- after these updates, only 10,091 (out of 850,502 parking addresses - excl. intersections) remain. these are a mixture of data entry errors and spelling mistakes
